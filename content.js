@@ -153,6 +153,11 @@
       html[${ROOT_ATTR}="true"] :is(nav,aside) a[href*="/c/"] :is(span,[class*="truncate"]) { text-align: right !important; direction: rtl !important; }
       html[${ROOT_ATTR}="true"][${FONT_ATTR}="b-nazanin"] main [${DIR_ATTR}="rtl"]:not(pre):not(code):not(.katex):not(.MathJax) { font-family: "B Nazanin", "BNazanin", serif !important; }
       html[${ROOT_ATTR}="true"][data-chatgpt-rtl-size]:not([data-chatgpt-rtl-size="0"]) main [${DIR_ATTR}="rtl"]:is(p,li,blockquote,dd,dt,figcaption,th,td,.whitespace-pre-wrap,[data-testid="user-message"]) { font-size: var(--chatgpt-rtl-font-size) !important; }
+      /* Sidebar chat titles: apply typography without affecting navigation icons. */
+      html[${ROOT_ATTR}="true"][${FONT_ATTR}="b-nazanin"] :is(nav,aside) a[href*="/c/"][${DIR_ATTR}="rtl"],
+      html[${ROOT_ATTR}="true"][${FONT_ATTR}="b-nazanin"] :is(nav,aside) a[href*="/c/"][${DIR_ATTR}="rtl"] :is(span,[class*="truncate"]) { font-family: "B Nazanin", "BNazanin", serif !important; }
+      html[${ROOT_ATTR}="true"][data-chatgpt-rtl-size]:not([data-chatgpt-rtl-size="0"]) :is(nav,aside) a[href*="/c/"][${DIR_ATTR}="rtl"],
+      html[${ROOT_ATTR}="true"][data-chatgpt-rtl-size]:not([data-chatgpt-rtl-size="0"]) :is(nav,aside) a[href*="/c/"][${DIR_ATTR}="rtl"] :is(span,[class*="truncate"]) { font-size: var(--chatgpt-rtl-font-size) !important; }
       html[${ROOT_ATTR}="true"] main pre,
       html[${ROOT_ATTR}="true"] main pre * { direction: ltr !important; text-align: left !important; }
       html[${ROOT_ATTR}="true"] main :is(code,.katex,.katex-display,.MathJax,math) { direction: ltr !important; unicode-bidi: isolate; }
