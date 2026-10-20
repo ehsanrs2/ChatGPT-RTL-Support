@@ -9,6 +9,14 @@
     const fontSizeInput = document.querySelector('#font-size');
     const fontSizeValue = document.querySelector('#font-size-value');
     const fontSizeReset = document.querySelector('#font-size-reset');
+    const latinRatioInput = document.querySelector('#latin-ratio');
+    const latinRatioValue = document.querySelector('#latin-ratio-value');
+    const normalizeRatio = value => Number.isInteger(Number(value)) && Number(value) >= 70 && Number(value) <= 100 ? Number(value) : 85;
+    const renderRatio = value => {
+      const ratio = normalizeRatio(value);
+      latinRatioInput.value = String(ratio);
+      latinRatioValue.textContent = `${ratio}%`;
+    };
     const normalizeSize = value => Number.isInteger(Number(value)) && Number(value) >= 12 && Number(value) <= 28 ? Number(value) : 0;
     const renderSize = value => {
       const size = normalizeSize(value);
@@ -39,12 +47,12 @@
       }
     }
 
-    async function syncPage(value, font, fontSize) {
+    async function syncPage(value, font, fontSize, latinRatio = normalizeRatio(latinRatioInput.value)) {
       if (!activeTabId) return;
       try {
         await ensureConnected();
         const result = await chrome.tabs.sendMessage(activeTabId,
-          {type: 'chatgpt-rtl-sync', enabled: value, font, fontSize});
+          {type: 'chatgpt-rtl-sync', enabled: value, font, fontSize, latinRatio});
         if (value && result?.messages === 0 && result?.mainBlocks === 0) {
           notice.textContent = 'Connected. No ChatGPT messages found on this page yet.';
         } else {
@@ -64,10 +72,11 @@
       } else {
         activeTabId = tab.id;
       }
-      const stored = await chrome.storage.local.get({buttonOn: false, fontChoice: 'default', fontSize: 0});
+      const stored = await chrome.storage.local.get({buttonOn: false, fontChoice: 'default', fontSize: 0, latinRatio: 85});
       render(stored.buttonOn === true);
       fontSelect.value = stored.fontChoice === 'b-nazanin' ? 'b-nazanin' : 'default';
       renderSize(stored.fontSize);
+      renderRatio(stored.latinRatio);
       if (activeTabId) await syncPage(stored.buttonOn === true, fontSelect.value, normalizeSize(stored.fontSize));
     } catch (error) {
       notice.textContent = 'Cannot initialize the extension. Check its errors in chrome://extensions.';
@@ -80,6 +89,28 @@
       if (changes.buttonOn) render(changes.buttonOn.newValue === true);
       if (changes.fontChoice) fontSelect.value = changes.fontChoice.newValue === 'b-nazanin' ? 'b-nazanin' : 'default';
       if (changes.fontSize) renderSize(changes.fontSize.newValue);
+      if (changes.latinRatio) renderRatio(changes.latinRatio.newValue);
+    });
+
+    latinRatioInput.addEventListener('input', () => {
+      renderRatio(latinRatioInput.value);
+      if (activeTabId) chrome.tabs.sendMessage(activeTabId, {
+        type: 'chatgpt-rtl-sync',
+        enabled: button.dataset.enabled === 'true',
+        font: fontSelect.value,
+        fontSize: normalizeSize(fontSizeInput.value),
+        latinRatio: normalizeRatio(latinRatioInput.value)
+      }).catch(() => {});
+    });
+    latinRatioInput.addEventListener('change', async () => {
+      const latinRatio = normalizeRatio(latinRatioInput.value);
+      try {
+        await chrome.storage.local.set({latinRatio});
+        if (activeTabId) await syncPage(button.dataset.enabled === 'true', fontSelect.value, normalizeSize(fontSizeInput.value), latinRatio);
+      } catch (error) {
+        notice.textContent = 'Could not save English size ratio.';
+        console.error('[ChatGPT RTL] Ratio save failed:', error);
+      }
     });
 
     fontSizeReset.addEventListener('click', async () => {
@@ -100,7 +131,8 @@
         type: 'chatgpt-rtl-sync',
         enabled: button.dataset.enabled === 'true',
         font: fontSelect.value,
-        fontSize: normalizeSize(fontSizeInput.value)
+        fontSize: normalizeSize(fontSizeInput.value),
+        latinRatio: normalizeRatio(latinRatioInput.value)
       }).catch(() => {});
     });
     fontSizeInput.addEventListener('change', async () => {
