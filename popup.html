@@ -20,23 +20,13 @@
       </button>
       <div class="font-setting">
         <label for="font-choice">Font / فونت</label>
-        <select id="font-choice" aria-label="ChatGPT Persian font">
-          <option value="default">Default (ChatGPT)</option>
-          <option value="b-nazanin">B Nazanin (installed locally)</option>
-        </select>
-        <small>B Nazanin must be installed on your computer.</small>
+        <select id="font-choice" aria-label="Installed system font"><option value="default">Default (ChatGPT)</option></select>
+        <small>Fonts installed on your computer, detected by Chrome.</small>
         <label for="font-size">Font size / اندازه فونت: <output id="font-size-value" for="font-size">Default</output></label>
         <input type="range" id="font-size" min="12" max="28" step="1" value="16" aria-label="Font size" list="font-size-marks">
         <datalist id="font-size-marks"><option value="12"></option><option value="16"></option><option value="20"></option><option value="24"></option><option value="28"></option></datalist>
-        <label for="latin-ratio">English / Latin ratio: <output id="latin-ratio-value" for="latin-ratio">85%</output></label>
-        <input type="range" id="latin-ratio" min="70" max="100" step="1" value="85" aria-label="English font size as percentage of Persian font size">
-        <small>When B Nazanin is selected, Latin letters use this ratio. Example: 20 px Persian → 17 px English.</small>
-        <label for="chat-width">Chat width: <output id="chat-width-value" for="chat-width">Default</output></label>
-        <input type="range" id="chat-width" min="50" max="100" step="5" value="85" aria-label="Chat content width percentage">
-        <button type="button" id="chat-width-reset" class="font-size-reset">Reset chat width</button>
-        <small>Adjust conversation width only. Sidebar and composer keep their layout.</small>
         <button type="button" id="font-size-reset" class="font-size-reset">Reset to default size</button>
-        <small>Default or 12–28 px. Only RTL conversation text changes.</small>
+        <small>Default or 12–28 px. Only RTL conversation text changes; sidebar stays untouched.</small>
       </div>
     </div>
     <div><img src="./assets/img/popup-optimized.webp" alt="RTL illustration" class="image"></div>
