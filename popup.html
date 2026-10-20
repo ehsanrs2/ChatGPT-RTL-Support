@@ -28,6 +28,9 @@
         <label for="font-size">Font size / اندازه فونت: <output id="font-size-value" for="font-size">Default</output></label>
         <input type="range" id="font-size" min="12" max="28" step="1" value="16" aria-label="Font size" list="font-size-marks">
         <datalist id="font-size-marks"><option value="12"></option><option value="16"></option><option value="20"></option><option value="24"></option><option value="28"></option></datalist>
+        <label for="latin-ratio">English / Latin ratio: <output id="latin-ratio-value" for="latin-ratio">85%</output></label>
+        <input type="range" id="latin-ratio" min="70" max="100" step="1" value="85" aria-label="English font size as percentage of Persian font size">
+        <small>When B Nazanin is selected, Latin letters use this ratio. Example: 20 px Persian → 17 px English.</small>
         <button type="button" id="font-size-reset" class="font-size-reset">Reset to default size</button>
         <small>Default or 12–28 px. Only RTL conversation text changes.</small>
       </div>
