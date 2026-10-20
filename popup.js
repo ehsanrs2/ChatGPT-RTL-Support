@@ -11,6 +11,16 @@
     const fontSizeReset = document.querySelector('#font-size-reset');
     const latinRatioInput = document.querySelector('#latin-ratio');
     const latinRatioValue = document.querySelector('#latin-ratio-value');
+    const chatWidthInput = document.querySelector('#chat-width');
+    const chatWidthValue = document.querySelector('#chat-width-value');
+    const chatWidthReset = document.querySelector('#chat-width-reset');
+    const normalizeWidth = value => Number.isInteger(Number(value)) && Number(value) >= 50 && Number(value) <= 100 && Number(value) % 5 === 0 ? Number(value) : 0;
+    const renderWidth = value => {
+      const width = normalizeWidth(value);
+      chatWidthInput.value = String(width || 85);
+      chatWidthValue.textContent = width ? `${width}%` : 'Default';
+      chatWidthValue.dataset.value = String(width);
+    };
     const normalizeRatio = value => Number.isInteger(Number(value)) && Number(value) >= 70 && Number(value) <= 100 ? Number(value) : 85;
     const renderRatio = value => {
       const ratio = normalizeRatio(value);
@@ -47,12 +57,12 @@
       }
     }
 
-    async function syncPage(value, font, fontSize, latinRatio = normalizeRatio(latinRatioInput.value)) {
+    async function syncPage(value, font, fontSize, latinRatio = normalizeRatio(latinRatioInput.value), chatWidth = normalizeWidth(chatWidthValue.dataset.value ?? 0)) {
       if (!activeTabId) return;
       try {
         await ensureConnected();
         const result = await chrome.tabs.sendMessage(activeTabId,
-          {type: 'chatgpt-rtl-sync', enabled: value, font, fontSize, latinRatio});
+          {type: 'chatgpt-rtl-sync', enabled: value, font, fontSize, latinRatio, chatWidth});
         if (value && result?.messages === 0 && result?.mainBlocks === 0) {
           notice.textContent = 'Connected. No ChatGPT messages found on this page yet.';
         } else {
@@ -72,11 +82,12 @@
       } else {
         activeTabId = tab.id;
       }
-      const stored = await chrome.storage.local.get({buttonOn: false, fontChoice: 'default', fontSize: 0, latinRatio: 85});
+      const stored = await chrome.storage.local.get({buttonOn: false, fontChoice: 'default', fontSize: 0, latinRatio: 85, chatWidth: 0});
       render(stored.buttonOn === true);
       fontSelect.value = stored.fontChoice === 'b-nazanin' ? 'b-nazanin' : 'default';
       renderSize(stored.fontSize);
       renderRatio(stored.latinRatio);
+      renderWidth(stored.chatWidth);
       if (activeTabId) await syncPage(stored.buttonOn === true, fontSelect.value, normalizeSize(stored.fontSize));
     } catch (error) {
       notice.textContent = 'Cannot initialize the extension. Check its errors in chrome://extensions.';
@@ -90,6 +101,38 @@
       if (changes.fontChoice) fontSelect.value = changes.fontChoice.newValue === 'b-nazanin' ? 'b-nazanin' : 'default';
       if (changes.fontSize) renderSize(changes.fontSize.newValue);
       if (changes.latinRatio) renderRatio(changes.latinRatio.newValue);
+      if (changes.chatWidth) renderWidth(changes.chatWidth.newValue);
+    });
+
+    chatWidthInput.addEventListener('input', () => {
+      renderWidth(chatWidthInput.value);
+      if (activeTabId) chrome.tabs.sendMessage(activeTabId, {
+        type: 'chatgpt-rtl-sync',
+        enabled: button.dataset.enabled === 'true',
+        font: fontSelect.value,
+        fontSize: normalizeSize(fontSizeInput.value),
+        latinRatio: normalizeRatio(latinRatioInput.value),
+        chatWidth: normalizeWidth(chatWidthInput.value)
+      }).catch(() => {});
+    });
+    chatWidthInput.addEventListener('change', async () => {
+      const chatWidth = normalizeWidth(chatWidthInput.value);
+      try {
+        await chrome.storage.local.set({chatWidth});
+        if (activeTabId) await syncPage(button.dataset.enabled === 'true', fontSelect.value, normalizeSize(fontSizeInput.value), normalizeRatio(latinRatioInput.value), chatWidth);
+      } catch (error) {
+        notice.textContent = 'Could not save chat width.';
+        console.error('[ChatGPT RTL] Width save failed:', error);
+      }
+    });
+    chatWidthReset.addEventListener('click', async () => {
+      renderWidth(0);
+      try {
+        await chrome.storage.local.set({chatWidth: 0});
+        if (activeTabId) await syncPage(button.dataset.enabled === 'true', fontSelect.value, normalizeSize(fontSizeInput.value), normalizeRatio(latinRatioInput.value), 0);
+      } catch (error) {
+        notice.textContent = 'Could not reset chat width.';
+      }
     });
 
     latinRatioInput.addEventListener('input', () => {
