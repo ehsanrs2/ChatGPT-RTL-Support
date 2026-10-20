@@ -14,6 +14,6 @@
     "matches": ["https://chatgpt.com/*", "https://chat.openai.com/*"],
     "js": ["content.js"], "run_at": "document_idle"
   }],
-  "permissions": ["storage", "scripting", "tabs"],
+  "permissions": ["storage", "scripting", "tabs", "fontSettings"],
   "action": {"default_title": "ChatGPT RTL Support", "default_popup": "popup.html"}
 }
