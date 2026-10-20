@@ -8,6 +8,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 MOCK_CHROME = r"""
 window.__storedButtonOn = true;
+window.__storedFontChoice = 'default';
+window.__storedFontSize = 0;
 window.__storageListeners = [];
 window.__storageSetCount = 0;
 window.chrome = {
@@ -20,21 +22,25 @@ window.chrome = {
     sendMessage: async (_id, payload) => ({ok: true, enabled: payload.enabled ?? true, messages: 2, marked: 5})
   },
   scripting: {executeScript: async () => []},
+  fontSettings: {getFontList: async () => [{fontId: 'Arial'}, {fontId: 'B Nazanin'}]},
   storage: {
     onChanged: {addListener: fn => window.__storageListeners.push(fn)},
     local: {
       get: (defaults, cb) => {
-        const result = {buttonOn: window.__storedButtonOn};
+        const result = {...defaults, buttonOn: window.__storedButtonOn, fontChoice: window.__storedFontChoice, fontSize: window.__storedFontSize};
         if (typeof cb === 'function') {cb(result); return;}
         return Promise.resolve(result);
       },
       set: (change) => {
         window.__storageSetCount++;
-        const prev = window.__storedButtonOn;
-        window.__storedButtonOn = change.buttonOn;
-        for (const listener of window.__storageListeners) {
-          listener({buttonOn: {oldValue: prev, newValue: change.buttonOn}}, 'local');
+        const changes = {};
+        for (const [key, value] of Object.entries(change)) {
+          const prop = key === 'buttonOn' ? '__storedButtonOn' : key === 'fontChoice' ? '__storedFontChoice' : '__storedFontSize';
+          const prev = window[prop];
+          window[prop] = value;
+          changes[key] = {oldValue: prev, newValue: value};
         }
+        for (const listener of window.__storageListeners) listener(changes, 'local');
         return Promise.resolve();
       }
     }
@@ -90,7 +96,9 @@ with sync_playwright() as p:
     assert page.locator('#title').evaluate('(e) => getComputedStyle(e).textAlign') == 'right'
     assert page.locator('#code').evaluate('(e) => getComputedStyle(e).direction') == 'ltr'
     assert page.locator('#global-ui').evaluate('(e) => getComputedStyle(e).direction') == 'ltr'
-    assert page.locator('#sidebar-title').evaluate('(e) => getComputedStyle(e).textAlign') == 'right'
+    # Sidebar typography is intentionally kept native, including alignment.
+    assert page.locator('#sidebar-title').evaluate('(e) => getComputedStyle(e).textAlign') != 'right'
+    assert attr('#sidebar-title') is None
     # Add a brand-new user message and assistant title without opening popup.
     page.evaluate('''() => document.querySelector('main').insertAdjacentHTML('beforeend',
       `<article data-message-author-role="user"><div class="whitespace-pre-wrap" id="new-user">سلام world</div></article>
@@ -123,6 +131,7 @@ with sync_playwright() as p:
     assert popup.locator('.button').get_attribute('aria-checked') == 'true'
     assert popup.locator('.button').get_attribute('data-enabled') == 'true'
     assert popup.evaluate('window.__storageSetCount') == 0
+    assert popup.locator('#font-choice option').count() == 3
     popup.locator('.button').click()
     popup.wait_for_timeout(70)
     assert popup.locator('.button').get_attribute('aria-checked') == 'false'
