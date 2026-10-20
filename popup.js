@@ -11,6 +11,7 @@
     const sizeInput = document.getElementById('font-size');
     const sizeLabel = document.getElementById('font-size-value');
     const reset = document.getElementById('font-size-reset');
+    const sidebarSelect = document.getElementById('sidebar-direction');
     let activeTabId = null;
     const normalizeSize = value => Number.isInteger(Number(value)) && +value >= 12 && +value <= 28 ? +value : 0;
     const render = enabled => {
@@ -28,12 +29,12 @@
     async function sync() {
       if (!activeTabId) return;
       try {
-        const state = await chrome.storage.local.get({buttonOn:false, fontChoice:'default', fontSize:0});
+        const state = await chrome.storage.local.get({buttonOn:false, fontChoice:'default', fontSize:0, sidebarDirection:'auto'});
         try { await chrome.tabs.sendMessage(activeTabId, {type:'chatgpt-rtl-ping'}); }
         catch { await chrome.scripting.executeScript({target:{tabId:activeTabId}, files:['content.js']}); }
         await chrome.tabs.sendMessage(activeTabId, {
           type:'chatgpt-rtl-sync', enabled:state.buttonOn === true,
-          font:state.fontChoice, fontSize:normalizeSize(state.fontSize)
+          font:state.fontChoice, fontSize:normalizeSize(state.fontSize), sidebarDirection:state.sidebarDirection
         });
         notice.textContent = '';
       } catch (e) { notice.textContent = 'Reload ChatGPT to apply changes.'; console.warn(e); }
@@ -42,9 +43,10 @@
       const [tab] = await chrome.tabs.query({active:true,currentWindow:true});
       if (tab && /^https:\/\/(chatgpt\.com|chat\.openai\.com)(\/|$)/i.test(tab.url || '')) activeTabId = tab.id;
       else { button.disabled = true; notice.textContent = 'Open chatgpt.com to enable RTL.'; }
-      const state = await chrome.storage.local.get({buttonOn:false,fontChoice:'default',fontSize:0});
+      const state = await chrome.storage.local.get({buttonOn:false,fontChoice:'default',fontSize:0,sidebarDirection:'auto'});
       render(state.buttonOn === true);
       renderSize(state.fontSize);
+      sidebarSelect.value = ['auto','rtl','ltr'].includes(state.sidebarDirection) ? state.sidebarDirection : 'auto';
       let installed = [];
       try { installed = await chrome.fontSettings.getFontList(); }
       catch (e) { notice.textContent = 'Cannot read installed fonts. Reload the extension.'; console.warn(e); }
@@ -58,6 +60,10 @@
       if (activeTabId) await sync();
     } catch(e) { notice.textContent = 'Extension initialization failed.'; console.error(e); }
     button.classList.add('initialized');
+    sidebarSelect.addEventListener('change', async () => {
+      await chrome.storage.local.set({sidebarDirection:sidebarSelect.value});
+      await sync();
+    });
     fonts.addEventListener('change', async () => {
       renderFontSource();
       await chrome.storage.local.set({fontChoice:fonts.value});
@@ -75,7 +81,7 @@
       if (activeTabId) chrome.tabs.sendMessage(activeTabId, {
         type:'chatgpt-rtl-sync',
         enabled: button.dataset.enabled === 'true',
-        font:fonts.value, fontSize:normalizeSize(sizeInput.value)
+        font:fonts.value, fontSize:normalizeSize(sizeInput.value), sidebarDirection:sidebarSelect.value
       }).catch(()=>{});
     });
     sizeInput.addEventListener('change', async () => {
@@ -91,6 +97,7 @@
       if(area !== 'local') return;
       if(changes.buttonOn) render(changes.buttonOn.newValue === true);
       if(changes.fontSize) renderSize(changes.fontSize.newValue);
+      if(changes.sidebarDirection) sidebarSelect.value = changes.sidebarDirection.newValue;
       if(changes.fontChoice && [...fonts.options].some(o=>o.value===changes.fontChoice.newValue)) {
         fonts.value=changes.fontChoice.newValue;
         renderFontSource();
