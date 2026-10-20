@@ -6,6 +6,14 @@
     const eye = document.querySelector('.eye');
     const notice = document.querySelector('.messageAlert');
     const fontSelect = document.querySelector('#font-choice');
+    const fontSizeInput = document.querySelector('#font-size');
+    const fontSizeValue = document.querySelector('#font-size-value');
+    const normalizeSize = value => Number.isInteger(Number(value)) && Number(value) >= 12 && Number(value) <= 28 ? Number(value) : 0;
+    const renderSize = value => {
+      const size = normalizeSize(value);
+      fontSizeInput.value = String(size);
+      fontSizeValue.textContent = size ? `${size} px` : 'Default';
+    };
     let activeTabId = null;
 
     function render(value) {
@@ -30,12 +38,12 @@
       }
     }
 
-    async function syncPage(value, font) {
+    async function syncPage(value, font, fontSize) {
       if (!activeTabId) return;
       try {
         await ensureConnected();
         const result = await chrome.tabs.sendMessage(activeTabId,
-          {type: 'chatgpt-rtl-sync', enabled: value, font});
+          {type: 'chatgpt-rtl-sync', enabled: value, font, fontSize});
         if (value && result?.messages === 0 && result?.mainBlocks === 0) {
           notice.textContent = 'Connected. No ChatGPT messages found on this page yet.';
         } else {
@@ -55,10 +63,11 @@
       } else {
         activeTabId = tab.id;
       }
-      const stored = await chrome.storage.local.get({buttonOn: false, fontChoice: 'default'});
+      const stored = await chrome.storage.local.get({buttonOn: false, fontChoice: 'default', fontSize: 0});
       render(stored.buttonOn === true);
       fontSelect.value = stored.fontChoice === 'b-nazanin' ? 'b-nazanin' : 'default';
-      if (activeTabId) await syncPage(stored.buttonOn === true, fontSelect.value);
+      renderSize(stored.fontSize);
+      if (activeTabId) await syncPage(stored.buttonOn === true, fontSelect.value, normalizeSize(stored.fontSize));
     } catch (error) {
       notice.textContent = 'Cannot initialize the extension. Check its errors in chrome://extensions.';
       console.error('[ChatGPT RTL] Popup init failed:', error);
@@ -69,6 +78,28 @@
       if (area !== 'local') return;
       if (changes.buttonOn) render(changes.buttonOn.newValue === true);
       if (changes.fontChoice) fontSelect.value = changes.fontChoice.newValue === 'b-nazanin' ? 'b-nazanin' : 'default';
+      if (changes.fontSize) renderSize(changes.fontSize.newValue);
+    });
+
+    fontSizeInput.addEventListener('input', () => {
+      renderSize(fontSizeInput.value);
+      // Live preview while dragging: content script handles the message.
+      if (activeTabId) chrome.tabs.sendMessage(activeTabId, {
+        type: 'chatgpt-rtl-sync',
+        enabled: button.dataset.enabled === 'true',
+        font: fontSelect.value,
+        fontSize: normalizeSize(fontSizeInput.value)
+      }).catch(() => {});
+    });
+    fontSizeInput.addEventListener('change', async () => {
+      const fontSize = normalizeSize(fontSizeInput.value);
+      try {
+        await chrome.storage.local.set({fontSize});
+        if (activeTabId) await syncPage(button.dataset.enabled === 'true', fontSelect.value, fontSize);
+      } catch (error) {
+        notice.textContent = 'Could not save font size.';
+        console.error('[ChatGPT RTL] Font size failed:', error);
+      }
     });
 
     fontSelect.addEventListener('change', async () => {
@@ -77,7 +108,7 @@
         await chrome.storage.local.set({fontChoice: choice});
         if (activeTabId) {
           const stored = await chrome.storage.local.get({buttonOn: false});
-          await syncPage(stored.buttonOn === true, choice);
+          await syncPage(stored.buttonOn === true, choice, normalizeSize(fontSizeInput.value));
         }
       } catch (error) {
         notice.textContent = 'Could not save font preference.';
@@ -93,7 +124,7 @@
         const next = stored.buttonOn !== true;
         await chrome.storage.local.set({buttonOn: next});
         render(next);
-        await syncPage(next, fontSelect.value);
+        await syncPage(next, fontSelect.value, normalizeSize(fontSizeInput.value));
       } catch (error) {
         notice.textContent = 'Could not save setting. See extension errors.';
         console.error('[ChatGPT RTL] Toggle failed:', error);
