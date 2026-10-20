@@ -58,3 +58,5 @@
 .font-setting .font-legend { display: flex; flex-wrap: wrap; gap: 5px 9px; font-size: 10px; }
 .font-setting .font-legend-default { color: #495666; }
 .font-setting .font-legend-system { color: #146c53; }
+
+.font-setting label[for="sidebar-direction"] { margin-top: 7px; }
