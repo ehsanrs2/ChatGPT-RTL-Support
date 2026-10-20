@@ -18,6 +18,20 @@
         <span class="half" style="right: 0;">Off</span>
         <span class="circle"></span>
       </button>
+      <div class="font-setting">
+        <label for="font-choice">Font / فونت</label>
+        <select id="font-choice" aria-label="Select font by source"><optgroup label="ChatGPT / Non-system"><option value="default">Default (ChatGPT)</option></optgroup><optgroup id="system-font-group" label="Installed system fonts"></optgroup></select>
+        <div class="font-legend"><span class="font-legend-default">● ChatGPT default</span><span class="font-legend-system">● System fonts</span></div>
+        <small>Fonts installed on your computer, detected by Chrome.</small>
+        <label for="sidebar-direction">Sidebar title alignment</label>
+        <select id="sidebar-direction" aria-label="Sidebar title alignment"><option value="auto">Auto (ChatGPT default)</option><option value="rtl">Right</option><option value="ltr">Left</option></select>
+        <small>Changes alignment only; sidebar font and size remain original.</small>
+        <label for="font-size">Font size / اندازه فونت: <output id="font-size-value" for="font-size">Default</output></label>
+        <input type="range" id="font-size" min="12" max="28" step="1" value="16" aria-label="Font size" list="font-size-marks">
+        <datalist id="font-size-marks"><option value="12"></option><option value="16"></option><option value="20"></option><option value="24"></option><option value="28"></option></datalist>
+        <button type="button" id="font-size-reset" class="font-size-reset">Reset to default size</button>
+        <small>Default or 12–28 px. Only RTL conversation text changes; sidebar stays untouched.</small>
+      </div>
     </div>
     <div><img src="./assets/img/popup-optimized.webp" alt="RTL illustration" class="image"></div>
   </div>

@@ -8,6 +8,13 @@
   const STYLE_ID = "chatgpt-rtl-support-style";
   const DIR_ATTR = "data-chatgpt-rtl-dir";
   const ROOT_ATTR = "data-chatgpt-rtl-active";
+  const FONT_ATTR = "data-chatgpt-rtl-font";
+
+  let selectedFont = "default";
+  let selectedSize = 0; // 0 preserves ChatGPT original size.
+  let sidebarDirection = "auto";
+  const SIDEBAR_TITLE = 'nav a[href*="/c/"], aside a[href*="/c/"]';
+
   const MESSAGE = [
     '[data-message-author-role]',
     '[data-testid^="conversation-turn"]',
@@ -104,10 +111,8 @@
     scanMain(node);
     if (node.matches(COMPOSERS)) mark(node);
     node.querySelectorAll(COMPOSERS).forEach(mark);
-    // Also process sidebar titles if they are added after a chat navigation.
-    const titles = node.matches('nav a[href*="/c/"], aside a[href*="/c/"]') ? [node] :
-      node.querySelectorAll('nav a[href*="/c/"], aside a[href*="/c/"]');
-    titles.forEach(mark);
+    if (node.matches(SIDEBAR_TITLE)) applySidebarDirection(node);
+    node.querySelectorAll(SIDEBAR_TITLE).forEach(applySidebarDirection);
   }
 
   function flush() {
@@ -138,15 +143,22 @@
   }
 
   function addStyles() {
-    if (document.getElementById(STYLE_ID)) return;
-    const sheet = document.createElement('style');
+    let sheet = document.getElementById(STYLE_ID);
+    if (sheet) return;
+    if (!sheet) {
+      sheet = document.createElement('style');
+      sheet.id = STYLE_ID;
+    }
     sheet.id = STYLE_ID;
     sheet.textContent = `
       html[${ROOT_ATTR}="true"] [${DIR_ATTR}="rtl"] { direction: rtl !important; text-align: right !important; }
       html[${ROOT_ATTR}="true"] [${DIR_ATTR}="ltr"] { direction: ltr !important; text-align: left !important; }
       html[${ROOT_ATTR}="true"] :is([data-message-author-role], [data-testid^="conversation-turn"], article[data-turn-id]) :is(h1,h2,h3,h4,h5,h6)[${DIR_ATTR}="rtl"] { text-align: right !important; }
-      html[${ROOT_ATTR}="true"] :is(nav,aside) a[href*="/c/"] { text-align: right !important; }
-      html[${ROOT_ATTR}="true"] :is(nav,aside) a[href*="/c/"] :is(span,[class*="truncate"]) { text-align: right !important; direction: rtl !important; }
+      html[${ROOT_ATTR}="true"][${FONT_ATTR}="custom"] main [${DIR_ATTR}="rtl"]:not(pre):not(code):not(.katex):not(.MathJax) { font-family: var(--chatgpt-rtl-selected-font, inherit) !important; }
+      html[${ROOT_ATTR}="true"][data-chatgpt-rtl-size]:not([data-chatgpt-rtl-size="0"]) main [${DIR_ATTR}="rtl"]:is(p,li,blockquote,dd,dt,figcaption,th,td,.whitespace-pre-wrap,[data-testid="user-message"]) { font-size: var(--chatgpt-rtl-font-size) !important; }
+      /* Only align the sidebar title link; never alter typography, dimensions, or icons. */
+      html[${ROOT_ATTR}="true"] :is(nav, aside) a[href*="/c/"][data-chatgpt-sidebar-align="rtl"] { text-align: right !important; }
+      html[${ROOT_ATTR}="true"] :is(nav, aside) a[href*="/c/"][data-chatgpt-sidebar-align="ltr"] { text-align: left !important; }
       html[${ROOT_ATTR}="true"] main pre,
       html[${ROOT_ATTR}="true"] main pre * { direction: ltr !important; text-align: left !important; }
       html[${ROOT_ATTR}="true"] main :is(code,.katex,.katex-display,.MathJax,math) { direction: ltr !important; unicode-bidi: isolate; }
@@ -158,7 +170,8 @@
     document.querySelectorAll(MESSAGE).forEach(processMessage);
     document.querySelectorAll('main').forEach(scanMain);
     document.querySelectorAll(COMPOSERS).forEach(mark);
-    document.querySelectorAll('nav a[href*="/c/"],aside a[href*="/c/"]').forEach(mark);
+    document.querySelectorAll(SIDEBAR_TITLE).forEach(applySidebarDirection);
+
   }
 
   function startObserving() {
@@ -229,6 +242,39 @@
     if (el) enqueue(el);
   }
 
+  function setFont(value) {
+    // Font names are supplied by Chrome fontSettings; CSS escaping via JSON string literal.
+    selectedFont = typeof value === 'string' && value.length <= 160 ? value : 'default';
+    const root = document.documentElement;
+    root.setAttribute(FONT_ATTR, selectedFont === 'default' ? 'default' : 'custom');
+    if (selectedFont === 'default') root.style.removeProperty('--chatgpt-rtl-selected-font');
+    else root.style.setProperty('--chatgpt-rtl-selected-font', JSON.stringify(selectedFont));
+  }
+
+  function setSize(value) {
+    const number = Number(value);
+    selectedSize = Number.isInteger(number) && number >= 12 && number <= 28 ? number : 0;
+    const root = document.documentElement;
+    root.setAttribute("data-chatgpt-rtl-size", String(selectedSize));
+    if (selectedSize) root.style.setProperty("--chatgpt-rtl-font-size", `${selectedSize}px`);
+    else root.style.removeProperty("--chatgpt-rtl-font-size");
+  }
+
+  function applySidebarDirection(link) {
+    if (!(link instanceof Element)) return;
+    if (!enabled || sidebarDirection === "auto") {
+      link.removeAttribute("data-chatgpt-sidebar-align");
+      return;
+    }
+    const direction = sidebarDirection === "rtl" ? "rtl" : "ltr";
+    link.setAttribute("data-chatgpt-sidebar-align", direction);
+  }
+
+  function setSidebarDirection(value) {
+    sidebarDirection = ["auto", "rtl", "ltr"].includes(value) ? value : "auto";
+    document.querySelectorAll(SIDEBAR_TITLE).forEach(applySidebarDirection);
+  }
+
   function setEnabled(next) {
     if (next === enabled) {
       if (enabled) refreshAll();
@@ -252,6 +298,7 @@
       document.getElementById(STYLE_ID)?.remove();
       document.documentElement.removeAttribute(ROOT_ATTR);
       document.querySelectorAll(`[${DIR_ATTR}]`).forEach(el => el.removeAttribute(DIR_ATTR));
+      document.querySelectorAll('[data-chatgpt-sidebar-align]').forEach(el => el.removeAttribute('data-chatgpt-sidebar-align'));
     }
   }
 
@@ -260,22 +307,34 @@
       mainBlocks: document.querySelectorAll('main p,main h1,main h2,main h3,main h4,main h5,main h6').length,
       mainMarked: document.querySelectorAll(`main [${DIR_ATTR}]`).length,
       marked: document.querySelectorAll(`[${DIR_ATTR}]`).length,
-      reconcileRuns, mutationBatches, autoReconcileActive: reconcileTimer !== null, version: '1.6.3'};
+      reconcileRuns, mutationBatches, autoReconcileActive: reconcileTimer !== null, font: selectedFont, fontSize: selectedSize, sidebarDirection, version: '1.6.3'};
   }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message?.type === 'chatgpt-rtl-ping') {
       sendResponse(status());
     } else if (message?.type === 'chatgpt-rtl-sync') {
+      if (message.font !== undefined) setFont(message.font);
+      if (message.fontSize !== undefined) setSize(message.fontSize);
+      if (message.sidebarDirection !== undefined) setSidebarDirection(message.sidebarDirection);
       setEnabled(message.enabled === true);
       sendResponse(status());
     }
   });
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes.buttonOn) setEnabled(changes.buttonOn.newValue === true);
+    if (area !== 'local') return;
+    if (changes.fontChoice) setFont(changes.fontChoice.newValue);
+    if (changes.fontSize) setSize(changes.fontSize.newValue);
+    if (changes.sidebarDirection) setSidebarDirection(changes.sidebarDirection.newValue);
+    if (changes.buttonOn) setEnabled(changes.buttonOn.newValue === true);
   });
-  chrome.storage.local.get({buttonOn: false}, data => {
-    if (!chrome.runtime.lastError) setEnabled(data.buttonOn === true);
+  chrome.storage.local.get({buttonOn: false, fontChoice: 'default', fontSize: 0, sidebarDirection: 'auto'}, data => {
+    if (!chrome.runtime.lastError) {
+      setFont(data.fontChoice);
+      setSize(data.fontSize);
+      setSidebarDirection(data.sidebarDirection);
+      setEnabled(data.buttonOn === true);
+    }
     else console.warn('[ChatGPT RTL] Storage error:', chrome.runtime.lastError.message);
   });
 })();
