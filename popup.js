@@ -1,223 +1,93 @@
-/* Popup is a preference switch and also reports whether the page script responds. */
+/* Local installed font picker: Chrome fontSettings API (Manifest V3). */
 (() => {
   'use strict';
   document.addEventListener('DOMContentLoaded', async () => {
     const button = document.querySelector('.button');
     const eye = document.querySelector('.eye');
     const notice = document.querySelector('.messageAlert');
-    const fontSelect = document.querySelector('#font-choice');
-    const fontSizeInput = document.querySelector('#font-size');
-    const fontSizeValue = document.querySelector('#font-size-value');
-    const fontSizeReset = document.querySelector('#font-size-reset');
-    const latinRatioInput = document.querySelector('#latin-ratio');
-    const latinRatioValue = document.querySelector('#latin-ratio-value');
-    const chatWidthInput = document.querySelector('#chat-width');
-    const chatWidthValue = document.querySelector('#chat-width-value');
-    const chatWidthReset = document.querySelector('#chat-width-reset');
-    const normalizeWidth = value => Number.isInteger(Number(value)) && Number(value) >= 50 && Number(value) <= 100 && Number(value) % 5 === 0 ? Number(value) : 0;
-    const renderWidth = value => {
-      const width = normalizeWidth(value);
-      chatWidthInput.value = String(width || 85);
-      chatWidthValue.textContent = width ? `${width}%` : 'Default';
-      chatWidthValue.dataset.value = String(width);
-    };
-    const normalizeRatio = value => Number.isInteger(Number(value)) && Number(value) >= 70 && Number(value) <= 100 ? Number(value) : 85;
-    const renderRatio = value => {
-      const ratio = normalizeRatio(value);
-      latinRatioInput.value = String(ratio);
-      latinRatioValue.textContent = `${ratio}%`;
-    };
-    const normalizeSize = value => Number.isInteger(Number(value)) && Number(value) >= 12 && Number(value) <= 28 ? Number(value) : 0;
-    const renderSize = value => {
-      const size = normalizeSize(value);
-      fontSizeInput.value = String(size || 16);
-      fontSizeValue.textContent = size ? `${size} px` : 'Default';
-    };
+    const fonts = document.getElementById('font-choice');
+    const sizeInput = document.getElementById('font-size');
+    const sizeLabel = document.getElementById('font-size-value');
+    const reset = document.getElementById('font-size-reset');
     let activeTabId = null;
-
-    function render(value) {
-      button.dataset.enabled = value ? 'true' : 'false';
-      button.setAttribute('aria-checked', String(value));
-      button.setAttribute('aria-label', value ? 'Disable RTL' : 'Enable RTL');
-      eye.textContent = value ? '📡' : '🤖';
-    }
-
-    function supported(url) {
-      return /^https:\/\/(chatgpt\.com|chat\.openai\.com)(\/|$)/i.test(url || '');
-    }
-
-    async function ensureConnected() {
-      if (!activeTabId) return null;
-      try {
-        return await chrome.tabs.sendMessage(activeTabId, {type: 'chatgpt-rtl-ping'});
-      } catch (_) {
-        // The tab may predate extension installation or reload. Inject immediately.
-        await chrome.scripting.executeScript({target: {tabId: activeTabId}, files: ['content.js']});
-        return chrome.tabs.sendMessage(activeTabId, {type: 'chatgpt-rtl-ping'});
-      }
-    }
-
-    async function syncPage(value, font, fontSize, latinRatio = normalizeRatio(latinRatioInput.value), chatWidth = normalizeWidth(chatWidthValue.dataset.value ?? 0)) {
+    const normalizeSize = value => Number.isInteger(Number(value)) && +value >= 12 && +value <= 28 ? +value : 0;
+    const render = enabled => {
+      button.dataset.enabled = String(enabled);
+      button.setAttribute('aria-checked', String(enabled));
+      button.setAttribute('aria-label', enabled ? 'Disable RTL' : 'Enable RTL');
+      eye.textContent = enabled ? '📡' : '🤖';
+    };
+    const renderSize = size => {
+      const value = normalizeSize(size);
+      sizeInput.value = String(value || 16);
+      sizeLabel.textContent = value ? value + ' px' : 'Default';
+      sizeLabel.dataset.value = String(value);
+    };
+    async function sync() {
       if (!activeTabId) return;
       try {
-        await ensureConnected();
-        const result = await chrome.tabs.sendMessage(activeTabId,
-          {type: 'chatgpt-rtl-sync', enabled: value, font, fontSize, latinRatio, chatWidth});
-        if (value && result?.messages === 0 && result?.mainBlocks === 0) {
-          notice.textContent = 'Connected. No ChatGPT messages found on this page yet.';
-        } else {
-          notice.textContent = '';
-        }
-      } catch (error) {
-        notice.textContent = 'Page script unavailable. Reload this ChatGPT tab, then try again.';
-        console.warn('[ChatGPT RTL] Cannot connect to page:', error);
-      }
+        const state = await chrome.storage.local.get({buttonOn:false, fontChoice:'default', fontSize:0});
+        try { await chrome.tabs.sendMessage(activeTabId, {type:'chatgpt-rtl-ping'}); }
+        catch { await chrome.scripting.executeScript({target:{tabId:activeTabId}, files:['content.js']}); }
+        await chrome.tabs.sendMessage(activeTabId, {
+          type:'chatgpt-rtl-sync', enabled:state.buttonOn === true,
+          font:state.fontChoice, fontSize:normalizeSize(state.fontSize)
+        });
+        notice.textContent = '';
+      } catch (e) { notice.textContent = 'Reload ChatGPT to apply changes.'; console.warn(e); }
     }
-
     try {
-      const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-      if (!supported(tab?.url) || !Number.isInteger(tab?.id)) {
-        button.disabled = true;
-        notice.textContent = 'Open chatgpt.com to use RTL support.';
-      } else {
-        activeTabId = tab.id;
-      }
-      const stored = await chrome.storage.local.get({buttonOn: false, fontChoice: 'default', fontSize: 0, latinRatio: 85, chatWidth: 0});
-      render(stored.buttonOn === true);
-      fontSelect.value = stored.fontChoice === 'b-nazanin' ? 'b-nazanin' : 'default';
-      renderSize(stored.fontSize);
-      renderRatio(stored.latinRatio);
-      renderWidth(stored.chatWidth);
-      if (activeTabId) await syncPage(stored.buttonOn === true, fontSelect.value, normalizeSize(stored.fontSize));
-    } catch (error) {
-      notice.textContent = 'Cannot initialize the extension. Check its errors in chrome://extensions.';
-      console.error('[ChatGPT RTL] Popup init failed:', error);
-    }
-
+      const [tab] = await chrome.tabs.query({active:true,currentWindow:true});
+      if (tab && /^https:\/\/(chatgpt\.com|chat\.openai\.com)(\/|$)/i.test(tab.url || '')) activeTabId = tab.id;
+      else { button.disabled = true; notice.textContent = 'Open chatgpt.com to enable RTL.'; }
+      const state = await chrome.storage.local.get({buttonOn:false,fontChoice:'default',fontSize:0});
+      render(state.buttonOn === true);
+      renderSize(state.fontSize);
+      let installed = [];
+      try { installed = await chrome.fontSettings.getFontList(); }
+      catch (e) { notice.textContent = 'Cannot read installed fonts. Reload the extension.'; console.warn(e); }
+      const names = [...new Set(installed.map(f => f.fontId).filter(Boolean))].sort((a,b) => a.localeCompare(b));
+      for (const name of names) fonts.add(new Option(name, name));
+      // Keep legacy preference if available; otherwise gracefully use default.
+      const previous = state.fontChoice === 'b-nazanin' ? names.find(n => /^(b ?nazanin)$/i.test(n)) : state.fontChoice;
+      fonts.value = names.includes(previous) ? previous : 'default';
+      if (fonts.value !== state.fontChoice) await chrome.storage.local.set({fontChoice:fonts.value});
+      if (activeTabId) await sync();
+    } catch(e) { notice.textContent = 'Extension initialization failed.'; console.error(e); }
     button.classList.add('initialized');
-    chrome.storage.onChanged.addListener((changes, area) => {
-      if (area !== 'local') return;
-      if (changes.buttonOn) render(changes.buttonOn.newValue === true);
-      if (changes.fontChoice) fontSelect.value = changes.fontChoice.newValue === 'b-nazanin' ? 'b-nazanin' : 'default';
-      if (changes.fontSize) renderSize(changes.fontSize.newValue);
-      if (changes.latinRatio) renderRatio(changes.latinRatio.newValue);
-      if (changes.chatWidth) renderWidth(changes.chatWidth.newValue);
+    fonts.addEventListener('change', async () => {
+      await chrome.storage.local.set({fontChoice:fonts.value});
+      await sync();
     });
-
-    chatWidthInput.addEventListener('input', () => {
-      renderWidth(chatWidthInput.value);
-      if (activeTabId) chrome.tabs.sendMessage(activeTabId, {
-        type: 'chatgpt-rtl-sync',
-        enabled: button.dataset.enabled === 'true',
-        font: fontSelect.value,
-        fontSize: normalizeSize(fontSizeInput.value),
-        latinRatio: normalizeRatio(latinRatioInput.value),
-        chatWidth: normalizeWidth(chatWidthInput.value)
-      }).catch(() => {});
-    });
-    chatWidthInput.addEventListener('change', async () => {
-      const chatWidth = normalizeWidth(chatWidthInput.value);
-      try {
-        await chrome.storage.local.set({chatWidth});
-        if (activeTabId) await syncPage(button.dataset.enabled === 'true', fontSelect.value, normalizeSize(fontSizeInput.value), normalizeRatio(latinRatioInput.value), chatWidth);
-      } catch (error) {
-        notice.textContent = 'Could not save chat width.';
-        console.error('[ChatGPT RTL] Width save failed:', error);
-      }
-    });
-    chatWidthReset.addEventListener('click', async () => {
-      renderWidth(0);
-      try {
-        await chrome.storage.local.set({chatWidth: 0});
-        if (activeTabId) await syncPage(button.dataset.enabled === 'true', fontSelect.value, normalizeSize(fontSizeInput.value), normalizeRatio(latinRatioInput.value), 0);
-      } catch (error) {
-        notice.textContent = 'Could not reset chat width.';
-      }
-    });
-
-    latinRatioInput.addEventListener('input', () => {
-      renderRatio(latinRatioInput.value);
-      if (activeTabId) chrome.tabs.sendMessage(activeTabId, {
-        type: 'chatgpt-rtl-sync',
-        enabled: button.dataset.enabled === 'true',
-        font: fontSelect.value,
-        fontSize: normalizeSize(fontSizeInput.value),
-        latinRatio: normalizeRatio(latinRatioInput.value)
-      }).catch(() => {});
-    });
-    latinRatioInput.addEventListener('change', async () => {
-      const latinRatio = normalizeRatio(latinRatioInput.value);
-      try {
-        await chrome.storage.local.set({latinRatio});
-        if (activeTabId) await syncPage(button.dataset.enabled === 'true', fontSelect.value, normalizeSize(fontSizeInput.value), latinRatio);
-      } catch (error) {
-        notice.textContent = 'Could not save English size ratio.';
-        console.error('[ChatGPT RTL] Ratio save failed:', error);
-      }
-    });
-
-    fontSizeReset.addEventListener('click', async () => {
-      renderSize(0);
-      try {
-        await chrome.storage.local.set({fontSize: 0});
-        if (activeTabId) await syncPage(button.dataset.enabled === 'true', fontSelect.value, 0);
-      } catch (error) {
-        notice.textContent = 'Could not reset font size.';
-        console.error('[ChatGPT RTL] Font size reset failed:', error);
-      }
-    });
-
-    fontSizeInput.addEventListener('input', () => {
-      renderSize(fontSizeInput.value);
-      // Live preview while dragging: content script handles the message.
-      if (activeTabId) chrome.tabs.sendMessage(activeTabId, {
-        type: 'chatgpt-rtl-sync',
-        enabled: button.dataset.enabled === 'true',
-        font: fontSelect.value,
-        fontSize: normalizeSize(fontSizeInput.value),
-        latinRatio: normalizeRatio(latinRatioInput.value)
-      }).catch(() => {});
-    });
-    fontSizeInput.addEventListener('change', async () => {
-      const fontSize = normalizeSize(fontSizeInput.value);
-      try {
-        await chrome.storage.local.set({fontSize});
-        if (activeTabId) await syncPage(button.dataset.enabled === 'true', fontSelect.value, fontSize);
-      } catch (error) {
-        notice.textContent = 'Could not save font size.';
-        console.error('[ChatGPT RTL] Font size failed:', error);
-      }
-    });
-
-    fontSelect.addEventListener('change', async () => {
-      const choice = fontSelect.value === 'b-nazanin' ? 'b-nazanin' : 'default';
-      try {
-        await chrome.storage.local.set({fontChoice: choice});
-        if (activeTabId) {
-          const stored = await chrome.storage.local.get({buttonOn: false});
-          await syncPage(stored.buttonOn === true, choice, normalizeSize(fontSizeInput.value));
-        }
-      } catch (error) {
-        notice.textContent = 'Could not save font preference.';
-        console.error('[ChatGPT RTL] Font selection failed:', error);
-      }
-    });
-
     button.addEventListener('click', async () => {
-      if (button.disabled || !activeTabId) return;
-      button.disabled = true;
-      try {
-        const stored = await chrome.storage.local.get({buttonOn: false});
-        const next = stored.buttonOn !== true;
-        await chrome.storage.local.set({buttonOn: next});
-        render(next);
-        await syncPage(next, fontSelect.value, normalizeSize(fontSizeInput.value));
-      } catch (error) {
-        notice.textContent = 'Could not save setting. See extension errors.';
-        console.error('[ChatGPT RTL] Toggle failed:', error);
-      } finally {
-        button.disabled = false;
-      }
+      if (button.disabled) return;
+      const next = button.dataset.enabled !== 'true';
+      await chrome.storage.local.set({buttonOn:next});
+      render(next);
+      await sync();
+    });
+    sizeInput.addEventListener('input', () => {
+      renderSize(sizeInput.value);
+      if (activeTabId) chrome.tabs.sendMessage(activeTabId, {
+        type:'chatgpt-rtl-sync',
+        enabled: button.dataset.enabled === 'true',
+        font:fonts.value, fontSize:normalizeSize(sizeInput.value)
+      }).catch(()=>{});
+    });
+    sizeInput.addEventListener('change', async () => {
+      await chrome.storage.local.set({fontSize:normalizeSize(sizeInput.value)});
+      await sync();
+    });
+    reset.addEventListener('click', async () => {
+      renderSize(0);
+      await chrome.storage.local.set({fontSize:0});
+      await sync();
+    });
+    chrome.storage.onChanged.addListener((changes,area) => {
+      if(area !== 'local') return;
+      if(changes.buttonOn) render(changes.buttonOn.newValue === true);
+      if(changes.fontSize) renderSize(changes.fontSize.newValue);
+      if(changes.fontChoice && [...fonts.options].some(o=>o.value===changes.fontChoice.newValue)) fonts.value=changes.fontChoice.newValue;
     });
   });
 })();
