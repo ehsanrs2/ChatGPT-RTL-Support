@@ -46,3 +46,5 @@
 
 /* Language-specific type size ratio */
 .font-setting label[for="latin-ratio"] { margin-top: 6px; }
+
+.font-setting label[for="chat-width"] { margin-top: 6px; }
