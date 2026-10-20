@@ -1,5 +1,7 @@
 """Headless browser smoke tests for the RTL overlay (not live chatgpt.com)."""
 from pathlib import Path
+import os
+from shutil import which
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -47,11 +49,25 @@ window.__setRtl = value => {
 };
 """
 
+
+
+def launch_test_chromium(playwright):
+    """Use Playwright's managed Chromium in CI; system Chromium locally if present."""
+    kwargs = {"headless": True}
+    custom = os.environ.get("RTL_CHROMIUM_EXECUTABLE")
+    if custom:
+        kwargs["executable_path"] = custom
+    elif os.environ.get("CI", "").lower() != "true":
+        local = which("chromium") or which("chromium-browser")
+        if local:
+            kwargs["executable_path"] = local
+    return playwright.chromium.launch(**kwargs)
+
 with sync_playwright() as p:
-    browser = p.chromium.launch(executable_path='/usr/bin/chromium', headless=True,
-                                args=['--no-sandbox', '--disable-dev-shm-usage'])
+    browser = launch_test_chromium(p)
     page = browser.new_page()
-    page.on("pageerror", lambda e: print("PAGEERROR", e))
+    page_errors = []
+    page.on("pageerror", lambda e: page_errors.append(str(e)))
     page.on("console", lambda m: print("CONSOLE", m.type, m.text))
     page.add_init_script(MOCK_CHROME)
     page.set_content('''<html><head></head><body>
@@ -114,4 +130,5 @@ with sync_playwright() as p:
     assert popup.evaluate('window.__storedButtonOn') is False
     assert popup.evaluate('window.__storageSetCount') == 1
     print('POPUP: PASS (opening is read-only; toggle updates preference)')
+    assert not page_errors, page_errors
     browser.close()

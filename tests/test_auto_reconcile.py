@@ -3,6 +3,8 @@
 The HTML is synthetic; tests do not assert compatibility with live ChatGPT.
 """
 from pathlib import Path
+import os
+from shutil import which
 from playwright.sync_api import sync_playwright
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -27,10 +29,23 @@ window.__toggle = on => {
 };
 """
 
+
+
+def launch_test_chromium(playwright):
+    """Use Playwright's managed Chromium in CI; system Chromium locally if present."""
+    kwargs = {"headless": True}
+    custom = os.environ.get("RTL_CHROMIUM_EXECUTABLE")
+    if custom:
+        kwargs["executable_path"] = custom
+    elif os.environ.get("CI", "").lower() != "true":
+        local = which("chromium") or which("chromium-browser")
+        if local:
+            kwargs["executable_path"] = local
+    return playwright.chromium.launch(**kwargs)
+
 def test_no_popup_and_recovery():
   with sync_playwright() as p:
-    browser=p.chromium.launch(executable_path='/usr/bin/chromium', headless=True,
-      args=['--no-sandbox', '--disable-dev-shm-usage'])
+    browser=launch_test_chromium(p)
     page=browser.new_page()
     errors=[]
     page.on('pageerror', lambda e: errors.append(str(e)))
