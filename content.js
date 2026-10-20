@@ -12,6 +12,7 @@
   const FONTS = new Set(["default", "b-nazanin"]);
   let selectedFont = "default";
   let selectedSize = 0; // 0 preserves ChatGPT original size.
+  let latinRatio = 85; // Percent of Persian font size; B Nazanin only.
   const MESSAGE = [
     '[data-message-author-role]',
     '[data-testid^="conversation-turn"]',
@@ -142,20 +143,34 @@
   }
 
   function addStyles() {
-    if (document.getElementById(STYLE_ID)) return;
-    const sheet = document.createElement('style');
+    let sheet = document.getElementById(STYLE_ID);
+    if (sheet && sheet.dataset.latinRatio === String(latinRatio)) return;
+    if (!sheet) {
+      sheet = document.createElement('style');
+      sheet.id = STYLE_ID;
+    }
+    sheet.dataset.latinRatio = String(latinRatio);
     sheet.id = STYLE_ID;
     sheet.textContent = `
+      /* Glyph selection is CSS-only: no text nodes, selection, or streaming DOM are modified.
+         Latin font size is scaled using CSS Fonts size-adjust, supported in modern Chromium.
+         Do not apply this face to code/math or UI controls. */
+      @font-face {
+        font-family: "ChatGPT RTL Latin Scaled";
+        src: local("Arial");
+        unicode-range: U+0000-024F, U+1E00-1EFF;
+        size-adjust: ${latinRatio}%;
+      }
       html[${ROOT_ATTR}="true"] [${DIR_ATTR}="rtl"] { direction: rtl !important; text-align: right !important; }
       html[${ROOT_ATTR}="true"] [${DIR_ATTR}="ltr"] { direction: ltr !important; text-align: left !important; }
       html[${ROOT_ATTR}="true"] :is([data-message-author-role], [data-testid^="conversation-turn"], article[data-turn-id]) :is(h1,h2,h3,h4,h5,h6)[${DIR_ATTR}="rtl"] { text-align: right !important; }
       html[${ROOT_ATTR}="true"] :is(nav,aside) a[href*="/c/"] { text-align: right !important; }
       html[${ROOT_ATTR}="true"] :is(nav,aside) a[href*="/c/"] :is(span,[class*="truncate"]) { text-align: right !important; direction: rtl !important; }
-      html[${ROOT_ATTR}="true"][${FONT_ATTR}="b-nazanin"] main [${DIR_ATTR}="rtl"]:not(pre):not(code):not(.katex):not(.MathJax) { font-family: "B Nazanin", "BNazanin", serif !important; }
+      html[${ROOT_ATTR}="true"][${FONT_ATTR}="b-nazanin"] main [${DIR_ATTR}="rtl"]:not(pre):not(code):not(.katex):not(.MathJax) { font-family: "ChatGPT RTL Latin Scaled", "B Nazanin", "BNazanin", serif !important; }
       html[${ROOT_ATTR}="true"][data-chatgpt-rtl-size]:not([data-chatgpt-rtl-size="0"]) main [${DIR_ATTR}="rtl"]:is(p,li,blockquote,dd,dt,figcaption,th,td,.whitespace-pre-wrap,[data-testid="user-message"]) { font-size: var(--chatgpt-rtl-font-size) !important; }
       /* Sidebar chat titles: apply typography without affecting navigation icons. */
       html[${ROOT_ATTR}="true"][${FONT_ATTR}="b-nazanin"] :is(nav,aside) a[href*="/c/"][${DIR_ATTR}="rtl"],
-      html[${ROOT_ATTR}="true"][${FONT_ATTR}="b-nazanin"] :is(nav,aside) a[href*="/c/"][${DIR_ATTR}="rtl"] :is(span,[class*="truncate"]) { font-family: "B Nazanin", "BNazanin", serif !important; }
+      html[${ROOT_ATTR}="true"][${FONT_ATTR}="b-nazanin"] :is(nav,aside) a[href*="/c/"][${DIR_ATTR}="rtl"] :is(span,[class*="truncate"]) { font-family: "ChatGPT RTL Latin Scaled", "B Nazanin", "BNazanin", serif !important; }
       html[${ROOT_ATTR}="true"][data-chatgpt-rtl-size]:not([data-chatgpt-rtl-size="0"]) :is(nav,aside) a[href*="/c/"][${DIR_ATTR}="rtl"],
       html[${ROOT_ATTR}="true"][data-chatgpt-rtl-size]:not([data-chatgpt-rtl-size="0"]) :is(nav,aside) a[href*="/c/"][${DIR_ATTR}="rtl"] :is(span,[class*="truncate"]) { font-size: var(--chatgpt-rtl-font-size) !important; }
       html[${ROOT_ATTR}="true"] main pre,
@@ -254,6 +269,12 @@
     else root.style.removeProperty("--chatgpt-rtl-font-size");
   }
 
+  function setLatinRatio(value) {
+    const number = Number(value);
+    latinRatio = Number.isInteger(number) && number >= 70 && number <= 100 ? number : 85;
+    if (enabled) addStyles();
+  }
+
   function setEnabled(next) {
     if (next === enabled) {
       if (enabled) refreshAll();
@@ -285,7 +306,7 @@
       mainBlocks: document.querySelectorAll('main p,main h1,main h2,main h3,main h4,main h5,main h6').length,
       mainMarked: document.querySelectorAll(`main [${DIR_ATTR}]`).length,
       marked: document.querySelectorAll(`[${DIR_ATTR}]`).length,
-      reconcileRuns, mutationBatches, autoReconcileActive: reconcileTimer !== null, font: selectedFont, fontSize: selectedSize, version: '1.6.3'};
+      reconcileRuns, mutationBatches, autoReconcileActive: reconcileTimer !== null, font: selectedFont, fontSize: selectedSize, latinRatio, version: '1.6.3'};
   }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -294,6 +315,7 @@
     } else if (message?.type === 'chatgpt-rtl-sync') {
       if (message.font !== undefined) setFont(message.font);
       if (message.fontSize !== undefined) setSize(message.fontSize);
+      if (message.latinRatio !== undefined) setLatinRatio(message.latinRatio);
       setEnabled(message.enabled === true);
       sendResponse(status());
     }
@@ -302,12 +324,14 @@
     if (area !== 'local') return;
     if (changes.fontChoice) setFont(changes.fontChoice.newValue);
     if (changes.fontSize) setSize(changes.fontSize.newValue);
+    if (changes.latinRatio) setLatinRatio(changes.latinRatio.newValue);
     if (changes.buttonOn) setEnabled(changes.buttonOn.newValue === true);
   });
-  chrome.storage.local.get({buttonOn: false, fontChoice: 'default', fontSize: 0}, data => {
+  chrome.storage.local.get({buttonOn: false, fontChoice: 'default', fontSize: 0, latinRatio: 85}, data => {
     if (!chrome.runtime.lastError) {
       setFont(data.fontChoice);
       setSize(data.fontSize);
+      setLatinRatio(data.latinRatio);
       setEnabled(data.buttonOn === true);
     }
     else console.warn('[ChatGPT RTL] Storage error:', chrome.runtime.lastError.message);
