@@ -112,7 +112,7 @@
     // Also process sidebar titles if they are added after a chat navigation.
     const titles = node.matches('nav a[href*="/c/"], aside a[href*="/c/"]') ? [node] :
       node.querySelectorAll('nav a[href*="/c/"], aside a[href*="/c/"]');
-    titles.forEach(mark);
+    // Sidebar retains ChatGPT native typography and direction.
   }
 
   function flush() {
@@ -164,15 +164,8 @@
       html[${ROOT_ATTR}="true"] [${DIR_ATTR}="rtl"] { direction: rtl !important; text-align: right !important; }
       html[${ROOT_ATTR}="true"] [${DIR_ATTR}="ltr"] { direction: ltr !important; text-align: left !important; }
       html[${ROOT_ATTR}="true"] :is([data-message-author-role], [data-testid^="conversation-turn"], article[data-turn-id]) :is(h1,h2,h3,h4,h5,h6)[${DIR_ATTR}="rtl"] { text-align: right !important; }
-      html[${ROOT_ATTR}="true"] :is(nav,aside) a[href*="/c/"] { text-align: right !important; }
-      html[${ROOT_ATTR}="true"] :is(nav,aside) a[href*="/c/"] :is(span,[class*="truncate"]) { text-align: right !important; direction: rtl !important; }
       html[${ROOT_ATTR}="true"][${FONT_ATTR}="b-nazanin"] main [${DIR_ATTR}="rtl"]:not(pre):not(code):not(.katex):not(.MathJax) { font-family: "ChatGPT RTL Latin Scaled", "B Nazanin", "BNazanin", serif !important; }
       html[${ROOT_ATTR}="true"][data-chatgpt-rtl-size]:not([data-chatgpt-rtl-size="0"]) main [${DIR_ATTR}="rtl"]:is(p,li,blockquote,dd,dt,figcaption,th,td,.whitespace-pre-wrap,[data-testid="user-message"]) { font-size: var(--chatgpt-rtl-font-size) !important; }
-      /* Sidebar chat titles: apply typography without affecting navigation icons. */
-      html[${ROOT_ATTR}="true"][${FONT_ATTR}="b-nazanin"] :is(nav,aside) a[href*="/c/"][${DIR_ATTR}="rtl"],
-      html[${ROOT_ATTR}="true"][${FONT_ATTR}="b-nazanin"] :is(nav,aside) a[href*="/c/"][${DIR_ATTR}="rtl"] :is(span,[class*="truncate"]) { font-family: "ChatGPT RTL Latin Scaled", "B Nazanin", "BNazanin", serif !important; }
-      html[${ROOT_ATTR}="true"][data-chatgpt-rtl-size]:not([data-chatgpt-rtl-size="0"]) :is(nav,aside) a[href*="/c/"][${DIR_ATTR}="rtl"],
-      html[${ROOT_ATTR}="true"][data-chatgpt-rtl-size]:not([data-chatgpt-rtl-size="0"]) :is(nav,aside) a[href*="/c/"][${DIR_ATTR}="rtl"] :is(span,[class*="truncate"]) { font-size: var(--chatgpt-rtl-font-size) !important; }
       html[${ROOT_ATTR}="true"] main pre,
       html[${ROOT_ATTR}="true"] main pre * { direction: ltr !important; text-align: left !important; }
       html[${ROOT_ATTR}="true"] main :is(code,.katex,.katex-display,.MathJax,math) { direction: ltr !important; unicode-bidi: isolate; }
@@ -184,7 +177,7 @@
     document.querySelectorAll(MESSAGE).forEach(processMessage);
     document.querySelectorAll('main').forEach(scanMain);
     document.querySelectorAll(COMPOSERS).forEach(mark);
-    document.querySelectorAll('nav a[href*="/c/"],aside a[href*="/c/"]').forEach(mark);
+
   }
 
   function startObserving() {
