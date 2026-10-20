@@ -13,6 +13,7 @@
   let selectedFont = "default";
   let selectedSize = 0; // 0 preserves ChatGPT original size.
   let latinRatio = 85; // Percent of Persian font size; B Nazanin only.
+  let chatWidth = 0; // 0 preserves native ChatGPT layout.
   const MESSAGE = [
     '[data-message-author-role]',
     '[data-testid^="conversation-turn"]',
@@ -166,6 +167,14 @@
       html[${ROOT_ATTR}="true"] :is([data-message-author-role], [data-testid^="conversation-turn"], article[data-turn-id]) :is(h1,h2,h3,h4,h5,h6)[${DIR_ATTR}="rtl"] { text-align: right !important; }
       html[${ROOT_ATTR}="true"][${FONT_ATTR}="b-nazanin"] main [${DIR_ATTR}="rtl"]:not(pre):not(code):not(.katex):not(.MathJax) { font-family: "ChatGPT RTL Latin Scaled", "B Nazanin", "BNazanin", serif !important; }
       html[${ROOT_ATTR}="true"][data-chatgpt-rtl-size]:not([data-chatgpt-rtl-size="0"]) main [${DIR_ATTR}="rtl"]:is(p,li,blockquote,dd,dt,figcaption,th,td,.whitespace-pre-wrap,[data-testid="user-message"]) { font-size: var(--chatgpt-rtl-font-size) !important; }
+      /* Chat content containers only; exclude the composer and its ancestors.
+         0 restores native width; other values use a viewport-relative maximum. */
+      html[${ROOT_ATTR}="true"][data-chatgpt-rtl-width]:not([data-chatgpt-rtl-width="0"])
+        main :is(.max-w-3xl, [class*="max-w-[var(--thread-content-max-width"])
+        :not(:has(#prompt-textarea, .ProseMirror[contenteditable="true"])) {
+          max-width: min(calc(100% - 24px), var(--chatgpt-rtl-content-width)) !important;
+          width: 100% !important;
+        }
       html[${ROOT_ATTR}="true"] main pre,
       html[${ROOT_ATTR}="true"] main pre * { direction: ltr !important; text-align: left !important; }
       html[${ROOT_ATTR}="true"] main :is(code,.katex,.katex-display,.MathJax,math) { direction: ltr !important; unicode-bidi: isolate; }
@@ -268,6 +277,15 @@
     if (enabled) addStyles();
   }
 
+  function setChatWidth(value) {
+    const number = Number(value);
+    chatWidth = Number.isInteger(number) && number >= 50 && number <= 100 ? number : 0;
+    const root = document.documentElement;
+    root.setAttribute("data-chatgpt-rtl-width", String(chatWidth));
+    if (chatWidth) root.style.setProperty("--chatgpt-rtl-content-width", `${chatWidth}vw`);
+    else root.style.removeProperty("--chatgpt-rtl-content-width");
+  }
+
   function setEnabled(next) {
     if (next === enabled) {
       if (enabled) refreshAll();
@@ -299,7 +317,7 @@
       mainBlocks: document.querySelectorAll('main p,main h1,main h2,main h3,main h4,main h5,main h6').length,
       mainMarked: document.querySelectorAll(`main [${DIR_ATTR}]`).length,
       marked: document.querySelectorAll(`[${DIR_ATTR}]`).length,
-      reconcileRuns, mutationBatches, autoReconcileActive: reconcileTimer !== null, font: selectedFont, fontSize: selectedSize, latinRatio, version: '1.6.3'};
+      reconcileRuns, mutationBatches, autoReconcileActive: reconcileTimer !== null, font: selectedFont, fontSize: selectedSize, latinRatio, chatWidth, version: '1.6.3'};
   }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -309,6 +327,7 @@
       if (message.font !== undefined) setFont(message.font);
       if (message.fontSize !== undefined) setSize(message.fontSize);
       if (message.latinRatio !== undefined) setLatinRatio(message.latinRatio);
+      if (message.chatWidth !== undefined) setChatWidth(message.chatWidth);
       setEnabled(message.enabled === true);
       sendResponse(status());
     }
@@ -318,13 +337,15 @@
     if (changes.fontChoice) setFont(changes.fontChoice.newValue);
     if (changes.fontSize) setSize(changes.fontSize.newValue);
     if (changes.latinRatio) setLatinRatio(changes.latinRatio.newValue);
+    if (changes.chatWidth) setChatWidth(changes.chatWidth.newValue);
     if (changes.buttonOn) setEnabled(changes.buttonOn.newValue === true);
   });
-  chrome.storage.local.get({buttonOn: false, fontChoice: 'default', fontSize: 0, latinRatio: 85}, data => {
+  chrome.storage.local.get({buttonOn: false, fontChoice: 'default', fontSize: 0, latinRatio: 85, chatWidth: 0}, data => {
     if (!chrome.runtime.lastError) {
       setFont(data.fontChoice);
       setSize(data.fontSize);
       setLatinRatio(data.latinRatio);
+      setChatWidth(data.chatWidth);
       setEnabled(data.buttonOn === true);
     }
     else console.warn('[ChatGPT RTL] Storage error:', chrome.runtime.lastError.message);
