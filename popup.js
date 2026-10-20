@@ -6,6 +6,8 @@
     const eye = document.querySelector('.eye');
     const notice = document.querySelector('.messageAlert');
     const fonts = document.getElementById('font-choice');
+    const systemFonts = document.getElementById('system-font-group');
+    const renderFontSource = () => { fonts.dataset.source = fonts.value === 'default' ? 'default' : 'system'; };
     const sizeInput = document.getElementById('font-size');
     const sizeLabel = document.getElementById('font-size-value');
     const reset = document.getElementById('font-size-reset');
@@ -47,15 +49,17 @@
       try { installed = await chrome.fontSettings.getFontList(); }
       catch (e) { notice.textContent = 'Cannot read installed fonts. Reload the extension.'; console.warn(e); }
       const names = [...new Set(installed.map(f => f.fontId).filter(Boolean))].sort((a,b) => a.localeCompare(b));
-      for (const name of names) fonts.add(new Option(name, name));
+      for (const name of names) systemFonts.appendChild(new Option(name, name));
       // Keep legacy preference if available; otherwise gracefully use default.
       const previous = state.fontChoice === 'b-nazanin' ? names.find(n => /^(b ?nazanin)$/i.test(n)) : state.fontChoice;
       fonts.value = names.includes(previous) ? previous : 'default';
+      renderFontSource();
       if (fonts.value !== state.fontChoice) await chrome.storage.local.set({fontChoice:fonts.value});
       if (activeTabId) await sync();
     } catch(e) { notice.textContent = 'Extension initialization failed.'; console.error(e); }
     button.classList.add('initialized');
     fonts.addEventListener('change', async () => {
+      renderFontSource();
       await chrome.storage.local.set({fontChoice:fonts.value});
       await sync();
     });
@@ -87,7 +91,10 @@
       if(area !== 'local') return;
       if(changes.buttonOn) render(changes.buttonOn.newValue === true);
       if(changes.fontSize) renderSize(changes.fontSize.newValue);
-      if(changes.fontChoice && [...fonts.options].some(o=>o.value===changes.fontChoice.newValue)) fonts.value=changes.fontChoice.newValue;
+      if(changes.fontChoice && [...fonts.options].some(o=>o.value===changes.fontChoice.newValue)) {
+        fonts.value=changes.fontChoice.newValue;
+        renderFontSource();
+      }
     });
   });
 })();
