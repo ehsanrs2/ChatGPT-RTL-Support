@@ -1,104 +1,87 @@
-// This code should execute when the popup of the extension is displayed
-document.addEventListener("DOMContentLoaded", function () {
-  // Function to check the website address
-  function checkURL(url) {
-    return /^https:\/\/chatgpt\.com\/.*/.test(url);
-  }
+/* Popup is a preference switch and also reports whether the page script responds. */
+(() => {
+  'use strict';
+  document.addEventListener('DOMContentLoaded', async () => {
+    const button = document.querySelector('.button');
+    const eye = document.querySelector('.eye');
+    const notice = document.querySelector('.messageAlert');
+    let activeTabId = null;
 
-  // Requesting information about the current tab
-  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-    const currentURL = tabs[0].url;
-
-    // If the website address doesn't match the pattern
-    if (!checkURL(currentURL)) {
-      // Display a message to the user
-      const message = document.createElement("p");
-      message.innerHTML =
-        '<p>The website address is not correct. This extension only works at <a href="https://chatgpt.com/" target="_blank">chat.openai.com</a></p>';
-
-      // Adding the message to the HTML tag with the class 'popup'
-      document.querySelector(".messageAlert").appendChild(message);
-
-      // Hide the popup
-      document.querySelector(".button").style.display = "none";
+    function render(value) {
+      button.dataset.enabled = value ? 'true' : 'false';
+      button.setAttribute('aria-checked', String(value));
+      button.setAttribute('aria-label', value ? 'Disable RTL' : 'Enable RTL');
+      eye.textContent = value ? '📡' : '🤖';
     }
-  });
-});
 
-// Function to update the UI based on the button state
-const updateUI = (buttonOn) => {
-  const eye = document.querySelector(".eye");
-  const button = document.querySelector(".button");
-  const circle = document.querySelector(".circle");
-
-  if (buttonOn) {
-    eye.innerHTML = "📡";
-    button.style.animation = "transformToBlue 0.5s ease-in-out 0s forwards";
-    circle.style.animation = "moveCircleRight 0.5s ease-in-out 0s forwards";
-  } else {
-    eye.innerHTML = "🤖";
-    button.style.animation = "transformToYellow 0.5s ease-in-out 0s forwards";
-    circle.style.animation = "moveCircleLeft 0.5s ease-in-out 0s forwards";
-  }
-};
-
-// Function to retrieve and update button state from local storage
-const updateButtonStateFromLocalStorage = () => {
-  chrome.storage.local.get(["buttonOn"], (result) => {
-    const buttonOn = result.buttonOn && false;
-    updateUI(buttonOn);
-    if (buttonOn) {
-      callAddStyle();
-    } else {
-      removeScript();
+    function supported(url) {
+      return /^https:\/\/(chatgpt\.com|chat\.openai\.com)(\/|$)/i.test(url || '');
     }
-  });
-};
 
-// Function to callAddStyle based on the button state
-const callAddStyle = () => {
-  getCurrentTab().then((tab) => {
-    const { id, url } = tab;
-    chrome.scripting.executeScript({
-      target: { tabId: id, allFrames: true },
-      files: ["assets/script/addContent.js"],
-    });
-  });
-};
+    async function ensureConnected() {
+      if (!activeTabId) return null;
+      try {
+        return await chrome.tabs.sendMessage(activeTabId, {type: 'chatgpt-rtl-ping'});
+      } catch (_) {
+        // The tab may predate extension installation or reload. Inject immediately.
+        await chrome.scripting.executeScript({target: {tabId: activeTabId}, files: ['content.js']});
+        return chrome.tabs.sendMessage(activeTabId, {type: 'chatgpt-rtl-ping'});
+      }
+    }
 
-// Function to removeScript based on the button state
-const removeScript = () => {
-  getCurrentTab().then((tab) => {
-    const { id, url } = tab;
-    chrome.scripting.executeScript({
-      target: { tabId: id, allFrames: true },
-      files: ["assets/script/removeContent.js"],
-    });
-  });
-};
+    async function syncPage(value) {
+      if (!activeTabId) return;
+      try {
+        await ensureConnected();
+        const result = await chrome.tabs.sendMessage(activeTabId,
+          {type: 'chatgpt-rtl-sync', enabled: value});
+        if (value && result?.messages === 0) {
+          notice.textContent = 'Connected. No ChatGPT messages found on this page yet.';
+        } else {
+          notice.textContent = '';
+        }
+      } catch (error) {
+        notice.textContent = 'Page script unavailable. Reload this ChatGPT tab, then try again.';
+        console.warn('[ChatGPT RTL] Cannot connect to page:', error);
+      }
+    }
 
-// Function to get the current tab
-const getCurrentTab = async () => {
-  let queryOptions = { active: true };
-  let [tab] = await chrome.tabs.query(queryOptions);
-  return tab;
-};
-
-// Add event listener to the button
-document.querySelector(".button").addEventListener("click", () => {
-  // Toggle the button state
-  chrome.storage.local.get(["buttonOn"], (result) => {
-    const newButtonState = !result.buttonOn; // Toggle the state
-    chrome.storage.local.set({ buttonOn: newButtonState }, () => {
-      updateUI(newButtonState);
-      if (newButtonState) {
-        callAddStyle();
+    try {
+      const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+      if (!supported(tab?.url) || !Number.isInteger(tab?.id)) {
+        button.disabled = true;
+        notice.textContent = 'Open chatgpt.com to use RTL support.';
       } else {
-        removeScript();
+        activeTabId = tab.id;
+      }
+      const stored = await chrome.storage.local.get({buttonOn: false});
+      render(stored.buttonOn === true);
+      if (activeTabId) await syncPage(stored.buttonOn === true);
+    } catch (error) {
+      notice.textContent = 'Cannot initialize the extension. Check its errors in chrome://extensions.';
+      console.error('[ChatGPT RTL] Popup init failed:', error);
+    }
+
+    button.classList.add('initialized');
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && changes.buttonOn) render(changes.buttonOn.newValue === true);
+    });
+
+    button.addEventListener('click', async () => {
+      if (button.disabled || !activeTabId) return;
+      button.disabled = true;
+      try {
+        const stored = await chrome.storage.local.get({buttonOn: false});
+        const next = stored.buttonOn !== true;
+        await chrome.storage.local.set({buttonOn: next});
+        render(next);
+        await syncPage(next);
+      } catch (error) {
+        notice.textContent = 'Could not save setting. See extension errors.';
+        console.error('[ChatGPT RTL] Toggle failed:', error);
+      } finally {
+        button.disabled = false;
       }
     });
   });
-});
-
-// Update the UI based on the button state when the content script is loaded
-updateButtonStateFromLocalStorage();
+})();
