@@ -99,6 +99,14 @@ with sync_playwright() as p:
     # Sidebar typography is intentionally kept native, including alignment.
     assert page.locator('#sidebar-title').evaluate('(e) => getComputedStyle(e).textAlign') != 'right'
     assert attr('#sidebar-title') is None
+    # Explicit sidebar alignment changes text alignment but not its computed font size.
+    original_sidebar_size = page.locator('#sidebar-title').evaluate('(e) => getComputedStyle(e).fontSize')
+    page.evaluate("window.__messageListener({type: 'chatgpt-rtl-sync', enabled: true, sidebarDirection: 'rtl'}, null, () => {})")
+    assert page.locator('nav a').evaluate('(e) => getComputedStyle(e).textAlign') == 'right'
+    assert page.locator('#sidebar-title').evaluate('(e) => getComputedStyle(e).fontSize') == original_sidebar_size
+    page.evaluate("window.__messageListener({type: 'chatgpt-rtl-sync', enabled: true, sidebarDirection: 'ltr'}, null, () => {})")
+    assert page.locator('nav a').evaluate('(e) => getComputedStyle(e).textAlign') == 'left'
+    page.evaluate("window.__messageListener({type: 'chatgpt-rtl-sync', enabled: true, sidebarDirection: 'auto'}, null, () => {})")
     # Add a brand-new user message and assistant title without opening popup.
     page.evaluate('''() => document.querySelector('main').insertAdjacentHTML('beforeend',
       `<article data-message-author-role="user"><div class="whitespace-pre-wrap" id="new-user">سلام world</div></article>
