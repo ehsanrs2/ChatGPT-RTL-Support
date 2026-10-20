@@ -8,10 +8,11 @@
     const fontSelect = document.querySelector('#font-choice');
     const fontSizeInput = document.querySelector('#font-size');
     const fontSizeValue = document.querySelector('#font-size-value');
+    const fontSizeReset = document.querySelector('#font-size-reset');
     const normalizeSize = value => Number.isInteger(Number(value)) && Number(value) >= 12 && Number(value) <= 28 ? Number(value) : 0;
     const renderSize = value => {
       const size = normalizeSize(value);
-      fontSizeInput.value = String(size);
+      fontSizeInput.value = String(size || 16);
       fontSizeValue.textContent = size ? `${size} px` : 'Default';
     };
     let activeTabId = null;
@@ -79,6 +80,17 @@
       if (changes.buttonOn) render(changes.buttonOn.newValue === true);
       if (changes.fontChoice) fontSelect.value = changes.fontChoice.newValue === 'b-nazanin' ? 'b-nazanin' : 'default';
       if (changes.fontSize) renderSize(changes.fontSize.newValue);
+    });
+
+    fontSizeReset.addEventListener('click', async () => {
+      renderSize(0);
+      try {
+        await chrome.storage.local.set({fontSize: 0});
+        if (activeTabId) await syncPage(button.dataset.enabled === 'true', fontSelect.value, 0);
+      } catch (error) {
+        notice.textContent = 'Could not reset font size.';
+        console.error('[ChatGPT RTL] Font size reset failed:', error);
+      }
     });
 
     fontSizeInput.addEventListener('input', () => {
