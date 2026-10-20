@@ -31,6 +31,10 @@
         <label for="latin-ratio">English / Latin ratio: <output id="latin-ratio-value" for="latin-ratio">85%</output></label>
         <input type="range" id="latin-ratio" min="70" max="100" step="1" value="85" aria-label="English font size as percentage of Persian font size">
         <small>When B Nazanin is selected, Latin letters use this ratio. Example: 20 px Persian → 17 px English.</small>
+        <label for="chat-width">Chat width: <output id="chat-width-value" for="chat-width">Default</output></label>
+        <input type="range" id="chat-width" min="50" max="100" step="5" value="85" aria-label="Chat content width percentage">
+        <button type="button" id="chat-width-reset" class="font-size-reset">Reset chat width</button>
+        <small>Adjust conversation width only. Sidebar and composer keep their layout.</small>
         <button type="button" id="font-size-reset" class="font-size-reset">Reset to default size</button>
         <small>Default or 12–28 px. Only RTL conversation text changes.</small>
       </div>
