@@ -43,3 +43,6 @@
 .font-setting output { font-weight: 400; color: #047fff; }
 .font-size-reset { margin: 2px 0; padding: 6px; border: 1px solid #aab7c2; border-radius: 6px; background: #fff; color: #1c2931; cursor: pointer; font: 12px Arial, sans-serif; }
 .font-size-reset:focus-visible { outline: 2px solid #047fff; }
+
+/* Language-specific type size ratio */
+.font-setting label[for="latin-ratio"] { margin-top: 6px; }
