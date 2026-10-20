@@ -26,8 +26,9 @@
         </select>
         <small>B Nazanin must be installed on your computer.</small>
         <label for="font-size">Font size / اندازه فونت: <output id="font-size-value" for="font-size">Default</output></label>
-        <input type="range" id="font-size" min="0" max="28" step="1" value="0" aria-label="Font size" list="font-size-marks">
-        <datalist id="font-size-marks"><option value="0"></option><option value="12"></option><option value="16"></option><option value="20"></option><option value="24"></option><option value="28"></option></datalist>
+        <input type="range" id="font-size" min="12" max="28" step="1" value="16" aria-label="Font size" list="font-size-marks">
+        <datalist id="font-size-marks"><option value="12"></option><option value="16"></option><option value="20"></option><option value="24"></option><option value="28"></option></datalist>
+        <button type="button" id="font-size-reset" class="font-size-reset">Reset to default size</button>
         <small>Default or 12–28 px. Only RTL conversation text changes.</small>
       </div>
     </div>
