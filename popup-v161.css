@@ -48,3 +48,13 @@
 .font-setting label[for="latin-ratio"] { margin-top: 6px; }
 
 .font-setting label[for="chat-width"] { margin-top: 6px; }
+
+/* Display font source using two accessible groups and visible source cues. */
+.font-setting #font-choice[data-source="default"] { color: #495666; border-color: #aab7c2; }
+.font-setting #font-choice[data-source="system"] { color: #146c53; border-color: #65a58f; }
+.font-setting #font-choice optgroup { font-weight: 700; }
+.font-setting #font-choice optgroup[label="ChatGPT / Non-system"] { color: #495666; }
+.font-setting #font-choice optgroup[label="Installed system fonts"] { color: #146c53; }
+.font-setting .font-legend { display: flex; flex-wrap: wrap; gap: 5px 9px; font-size: 10px; }
+.font-setting .font-legend-default { color: #495666; }
+.font-setting .font-legend-system { color: #146c53; }
