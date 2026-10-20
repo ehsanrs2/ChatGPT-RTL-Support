@@ -1,7 +1,7 @@
 /* ChatGPT RTL Support — dynamic page script, independent of the popup. */
 (() => {
   "use strict";
-  const INSTANCE_KEY = "__chatgptRtlSupportV162";
+  const INSTANCE_KEY = "__chatgptRtlSupportV163";
   if (globalThis[INSTANCE_KEY]) return;
   globalThis[INSTANCE_KEY] = true;
 
@@ -37,6 +37,11 @@
   const LTR = /[A-Za-z]/;
   let enabled = false;
   let observer = null;
+  let observedRoot = null;
+  let reconcileTimer = null;
+  let reconcileRuns = 0;
+  let mutationBatches = 0;
+  const RECONCILE_INTERVAL_MS = 3000;
   let flushTimer = null;
   const pending = new Set();
 
@@ -118,7 +123,12 @@
       if (message) messages.add(message);
       else processNode(el);
     }
-    messages.forEach(processMessage);
+    messages.forEach(message => {
+      processMessage(message);
+      // A semantic wrapper may appear at any time. Do not let the optimized
+      // message route bypass the wrapperless main-block fallback.
+      scanMain(message);
+    });
   }
 
   function enqueue(node) {
@@ -152,8 +162,13 @@
   }
 
   function startObserving() {
-    if (observer) return;
+    // If the app replaced the observed document root, restore observation.
+    if (observer && observedRoot === document.documentElement && observedRoot.isConnected) return;
+    observer?.disconnect();
+    const root = document.documentElement;
+    if (!root) return;
     observer = new MutationObserver(records => {
+      mutationBatches++;
       for (const record of records) {
         if (record.type === 'characterData') {
           enqueue(record.target.parentElement);
@@ -166,8 +181,47 @@
         }
       }
     });
-    observer.observe(document.documentElement, {subtree: true, childList: true, characterData: true});
-    document.addEventListener('input', onInput, true);
+    observer.observe(root, {subtree: true, childList: true, characterData: true});
+    observedRoot = root;
+  }
+
+  function reconcile() {
+    if (!enabled || document.visibilityState === 'hidden') return;
+    startObserving();
+    if (document.documentElement.getAttribute(ROOT_ATTR) !== 'true') {
+      document.documentElement.setAttribute(ROOT_ATTR, 'true');
+    }
+    addStyles();
+    refreshAll();
+    reconcileRuns++;
+  }
+
+  function onPageReturn() {
+    // popup used to call refreshAll through chatgpt-rtl-sync. Make that
+    // reconciliation automatic for navigation/focus and missed mutations.
+    reconcile();
+  }
+
+  function onVisibilityChange() {
+    if (document.visibilityState === 'visible') reconcile();
+  }
+
+  function startAutoReconcile() {
+    if (reconcileTimer !== null) return;
+    window.addEventListener('focus', onPageReturn);
+    window.addEventListener('pageshow', onPageReturn);
+    window.addEventListener('popstate', onPageReturn);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    reconcileTimer = window.setInterval(reconcile, RECONCILE_INTERVAL_MS);
+  }
+
+  function stopAutoReconcile() {
+    if (reconcileTimer !== null) window.clearInterval(reconcileTimer);
+    reconcileTimer = null;
+    window.removeEventListener('focus', onPageReturn);
+    window.removeEventListener('pageshow', onPageReturn);
+    window.removeEventListener('popstate', onPageReturn);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
   }
 
   function onInput(event) {
@@ -186,8 +240,11 @@
       addStyles();
       refreshAll();
       startObserving();
+      document.addEventListener('input', onInput, true);
+      startAutoReconcile();
     } else {
-      observer?.disconnect(); observer = null;
+      stopAutoReconcile();
+      observer?.disconnect(); observer = null; observedRoot = null;
       document.removeEventListener('input', onInput, true);
       if (flushTimer !== null) clearTimeout(flushTimer);
       flushTimer = null;
@@ -202,7 +259,8 @@
     return {ok: true, enabled, messages: document.querySelectorAll(MESSAGE).length,
       mainBlocks: document.querySelectorAll('main p,main h1,main h2,main h3,main h4,main h5,main h6').length,
       mainMarked: document.querySelectorAll(`main [${DIR_ATTR}]`).length,
-      marked: document.querySelectorAll(`[${DIR_ATTR}]`).length, version: '1.6.2'};
+      marked: document.querySelectorAll(`[${DIR_ATTR}]`).length,
+      reconcileRuns, mutationBatches, autoReconcileActive: reconcileTimer !== null, version: '1.6.3'};
   }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
