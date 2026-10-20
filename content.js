@@ -1,7 +1,7 @@
 /* ChatGPT RTL Support — dynamic page script, independent of the popup. */
 (() => {
   "use strict";
-  const INSTANCE_KEY = "__chatgptRtlSupportV161";
+  const INSTANCE_KEY = "__chatgptRtlSupportV162";
   if (globalThis[INSTANCE_KEY]) return;
   globalThis[INSTANCE_KEY] = true;
 
@@ -19,6 +19,18 @@
     'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
     'li', 'blockquote', 'th', 'td', 'dt', 'dd',
     '[data-testid="user-message"]'
+  ].join(',');
+  // Actual Chrome DOM probe (2026-10-20): no semantic message wrappers,
+  // but 104 paragraphs and 19 headings under main. Use block-level fallback.
+  const FALLBACK_BLOCKS = [
+    'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote',
+    'dd', 'dt', 'figcaption', 'th', 'td', '.whitespace-pre-wrap'
+  ].join(',');
+  const EXCLUDED_CONTENT = [
+    'nav', 'aside', 'header', 'footer', 'form', 'button',
+    '[role="button"]', '[role="dialog"]', '[role="menu"]', '[role="tablist"]',
+    '[contenteditable]', 'textarea', 'input', 'pre', 'code',
+    'math', '.katex', '.katex-display', '.MathJax'
   ].join(',');
   const COMPOSERS = '[contenteditable="true"][data-placeholder], .ProseMirror[contenteditable="true"], #prompt-textarea, textarea';
   const RTL = /[\u0590-\u05ff\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff\ufb50-\ufdff\ufe70-\ufeff]/;
@@ -42,6 +54,31 @@
     }
   }
 
+  function isContentBlock(el) {
+    return el instanceof Element && el.isConnected &&
+      Boolean(el.closest('main')) && !el.closest(EXCLUDED_CONTENT);
+  }
+
+  function markMainBlock(el) {
+    if (isContentBlock(el) && el.matches(FALLBACK_BLOCKS)) mark(el);
+  }
+
+  function scanMain(node) {
+    if (!(node instanceof Element) || !node.isConnected) return;
+    // When a text node changes during streaming, scan its nearest block.
+    // In modern ChatGPT there may be NO message wrapper or .markdown at all.
+    if (node.closest('main')) {
+      markMainBlock(node.closest(FALLBACK_BLOCKS));
+      markMainBlock(node);
+      node.querySelectorAll(FALLBACK_BLOCKS).forEach(markMainBlock);
+    } else if (node.matches('main')) {
+      node.querySelectorAll(FALLBACK_BLOCKS).forEach(markMainBlock);
+    } else {
+      node.querySelectorAll('main').forEach(main =>
+        main.querySelectorAll(FALLBACK_BLOCKS).forEach(markMainBlock));
+    }
+  }
+
   function processMessage(message) {
     if (!message.isConnected) return;
     // Mark the message itself as a fallback when ChatGPT changes its inner markup.
@@ -59,6 +96,7 @@
       if (node.matches(MESSAGE)) processMessage(node);
       node.querySelectorAll(MESSAGE).forEach(processMessage);
     }
+    scanMain(node);
     if (node.matches(COMPOSERS)) mark(node);
     node.querySelectorAll(COMPOSERS).forEach(mark);
     // Also process sidebar titles if they are added after a chat navigation.
@@ -99,15 +137,16 @@
       html[${ROOT_ATTR}="true"] :is([data-message-author-role], [data-testid^="conversation-turn"], article[data-turn-id]) :is(h1,h2,h3,h4,h5,h6)[${DIR_ATTR}="rtl"] { text-align: right !important; }
       html[${ROOT_ATTR}="true"] :is(nav,aside) a[href*="/c/"] { text-align: right !important; }
       html[${ROOT_ATTR}="true"] :is(nav,aside) a[href*="/c/"] :is(span,[class*="truncate"]) { text-align: right !important; direction: rtl !important; }
-      html[${ROOT_ATTR}="true"] :is([data-message-author-role], [data-testid^="conversation-turn"], article[data-turn-id]) pre,
-      html[${ROOT_ATTR}="true"] :is([data-message-author-role], [data-testid^="conversation-turn"], article[data-turn-id]) pre * { direction: ltr !important; text-align: left !important; }
-      html[${ROOT_ATTR}="true"] :is([data-message-author-role], [data-testid^="conversation-turn"], article[data-turn-id]) :is(code,.katex,.katex-display) { direction: ltr !important; unicode-bidi: isolate; }
+      html[${ROOT_ATTR}="true"] main pre,
+      html[${ROOT_ATTR}="true"] main pre * { direction: ltr !important; text-align: left !important; }
+      html[${ROOT_ATTR}="true"] main :is(code,.katex,.katex-display,.MathJax,math) { direction: ltr !important; unicode-bidi: isolate; }
     `;
     (document.head || document.documentElement).appendChild(sheet);
   }
 
   function refreshAll() {
     document.querySelectorAll(MESSAGE).forEach(processMessage);
+    document.querySelectorAll('main').forEach(scanMain);
     document.querySelectorAll(COMPOSERS).forEach(mark);
     document.querySelectorAll('nav a[href*="/c/"],aside a[href*="/c/"]').forEach(mark);
   }
@@ -119,7 +158,7 @@
         if (record.type === 'characterData') {
           enqueue(record.target.parentElement);
         } else {
-          if (record.target instanceof Element && record.target.closest(MESSAGE)) enqueue(record.target);
+          if (record.target instanceof Element && record.target.closest('main')) enqueue(record.target);
           for (const node of record.addedNodes) {
             if (node instanceof Element) enqueue(node);
             else if (node.nodeType === Node.TEXT_NODE) enqueue(node.parentElement);
@@ -161,7 +200,9 @@
 
   function status() {
     return {ok: true, enabled, messages: document.querySelectorAll(MESSAGE).length,
-      marked: document.querySelectorAll(`[${DIR_ATTR}]`).length, version: '1.6.1'};
+      mainBlocks: document.querySelectorAll('main p,main h1,main h2,main h3,main h4,main h5,main h6').length,
+      mainMarked: document.querySelectorAll(`main [${DIR_ATTR}]`).length,
+      marked: document.querySelectorAll(`[${DIR_ATTR}]`).length, version: '1.6.2'};
   }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

@@ -35,7 +35,7 @@
         await ensureConnected();
         const result = await chrome.tabs.sendMessage(activeTabId,
           {type: 'chatgpt-rtl-sync', enabled: value});
-        if (value && result?.messages === 0) {
+        if (value && result?.messages === 0 && result?.mainBlocks === 0) {
           notice.textContent = 'Connected. No ChatGPT messages found on this page yet.';
         } else {
           notice.textContent = '';
