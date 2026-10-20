@@ -8,6 +8,9 @@
   const STYLE_ID = "chatgpt-rtl-support-style";
   const DIR_ATTR = "data-chatgpt-rtl-dir";
   const ROOT_ATTR = "data-chatgpt-rtl-active";
+  const FONT_ATTR = "data-chatgpt-rtl-font";
+  const FONTS = new Set(["default", "b-nazanin"]);
+  let selectedFont = "default";
   const MESSAGE = [
     '[data-message-author-role]',
     '[data-testid^="conversation-turn"]',
@@ -147,6 +150,7 @@
       html[${ROOT_ATTR}="true"] :is([data-message-author-role], [data-testid^="conversation-turn"], article[data-turn-id]) :is(h1,h2,h3,h4,h5,h6)[${DIR_ATTR}="rtl"] { text-align: right !important; }
       html[${ROOT_ATTR}="true"] :is(nav,aside) a[href*="/c/"] { text-align: right !important; }
       html[${ROOT_ATTR}="true"] :is(nav,aside) a[href*="/c/"] :is(span,[class*="truncate"]) { text-align: right !important; direction: rtl !important; }
+      html[${ROOT_ATTR}="true"][${FONT_ATTR}="b-nazanin"] main [${DIR_ATTR}="rtl"]:not(pre):not(code):not(.katex):not(.MathJax) { font-family: "B Nazanin", "BNazanin", serif !important; }
       html[${ROOT_ATTR}="true"] main pre,
       html[${ROOT_ATTR}="true"] main pre * { direction: ltr !important; text-align: left !important; }
       html[${ROOT_ATTR}="true"] main :is(code,.katex,.katex-display,.MathJax,math) { direction: ltr !important; unicode-bidi: isolate; }
@@ -229,6 +233,11 @@
     if (el) enqueue(el);
   }
 
+  function setFont(value) {
+    selectedFont = FONTS.has(value) ? value : "default";
+    document.documentElement.setAttribute(FONT_ATTR, selectedFont);
+  }
+
   function setEnabled(next) {
     if (next === enabled) {
       if (enabled) refreshAll();
@@ -260,22 +269,28 @@
       mainBlocks: document.querySelectorAll('main p,main h1,main h2,main h3,main h4,main h5,main h6').length,
       mainMarked: document.querySelectorAll(`main [${DIR_ATTR}]`).length,
       marked: document.querySelectorAll(`[${DIR_ATTR}]`).length,
-      reconcileRuns, mutationBatches, autoReconcileActive: reconcileTimer !== null, version: '1.6.3'};
+      reconcileRuns, mutationBatches, autoReconcileActive: reconcileTimer !== null, font: selectedFont, version: '1.6.3'};
   }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message?.type === 'chatgpt-rtl-ping') {
       sendResponse(status());
     } else if (message?.type === 'chatgpt-rtl-sync') {
+      if (message.font !== undefined) setFont(message.font);
       setEnabled(message.enabled === true);
       sendResponse(status());
     }
   });
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes.buttonOn) setEnabled(changes.buttonOn.newValue === true);
+    if (area !== 'local') return;
+    if (changes.fontChoice) setFont(changes.fontChoice.newValue);
+    if (changes.buttonOn) setEnabled(changes.buttonOn.newValue === true);
   });
-  chrome.storage.local.get({buttonOn: false}, data => {
-    if (!chrome.runtime.lastError) setEnabled(data.buttonOn === true);
+  chrome.storage.local.get({buttonOn: false, fontChoice: 'default'}, data => {
+    if (!chrome.runtime.lastError) {
+      setFont(data.fontChoice);
+      setEnabled(data.buttonOn === true);
+    }
     else console.warn('[ChatGPT RTL] Storage error:', chrome.runtime.lastError.message);
   });
 })();
