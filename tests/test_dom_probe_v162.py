@@ -1,5 +1,6 @@
 """Regression: user's live DOM probe showed zero message wrappers, 104 p and 19 headings."""
 from pathlib import Path
+from shutil import which
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -32,7 +33,11 @@ def computed(page, sel, prop):
 
 def test_probe_shaped_dom():
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True)
+        chromium_path = which('chromium') or which('chromium-browser')
+        launch_args = {'headless': True}
+        if chromium_path:
+            launch_args['executable_path'] = chromium_path
+        browser = playwright.chromium.launch(**launch_args)
         page = browser.new_page()
         errors = []
         page.on('pageerror', lambda e: errors.append(str(e)))
